@@ -88,6 +88,11 @@ impl LightningNetworkMap {
         let mut visited = HashSet::new();
         let mut current_path = vec![starting_node.to_string()];
 
+        println!("Starting node: {}", starting_node);
+        println!("Budget: {}", cltv_budget);
+        println!("Max hops: {}", max_hops);
+        println!("Current Path: {:?}", current_path);
+
         self.dfs_routes(&mut routes, &mut visited, &mut current_path, starting_node, cltv_budget, 0, max_hops);
 
         routes
@@ -102,7 +107,7 @@ impl LightningNetworkMap {
                   budget: u32,
                   used_budget: u32,
                   max_depth: usize) {
-        if current_path.len() > max_depth || used_budget > budget {
+        if current_path.len().saturating_sub(1) > max_depth || used_budget > budget {
             return;
         }
 
@@ -202,10 +207,12 @@ mod tests {
 
         // Budget for exactly 2 hops (node1 -> node2 -> node3)
         let routes = network.find_possible_routes_with_budget("node1", 40, 3);
+        println!("2-hop Routes: {:?}", routes);
         assert!(routes.contains(&vec!["node1".to_string(), "node2".to_string(), "node3".to_string()]));
 
         // Budget for all 3 hops
         let routes = network.find_possible_routes_with_budget("node1", 60, 3);
+        println!("3-hop Routes: {:?}", routes);
         assert!(routes.contains(&vec!["node1".to_string(), "node2".to_string(), "node3".to_string(), "node4".to_string()]));
     }
 }
