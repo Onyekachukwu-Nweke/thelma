@@ -2,7 +2,8 @@
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
-
+use rayon::prelude::*;
+use log::log;
 use crate::models::{HTLC, LightningNetworkMap, TimelockAnalysis, DEFAULT_FINAL_CLTV_DELTA};
 
 // Result of surveillance analysis for a potential recipient
@@ -26,60 +27,48 @@ impl HTLCAnalyzer {
 
     // Analyze a specific HTLC observation to determine potential recipients
     pub fn analyze_htlc(&self, htlc: &HTLC) -> Vec<PotentialRecipient> {
+        log::info!("Analyzing HTLC");
         let network = self.network.lock().unwrap();
 
-        // Get timelock analysis
         let timelock_analysis = htlc.timelock_analysis();
-
-        // For each malicious node, find potential destinations
-        let mut potential_recipients = Vec::new();
         let observed_node = htlc.observed_by_node.clone();
-
-        // Get the max reasonable number of hops to search
         let max_hops = timelock_analysis.max_remaining_hops;
 
-        // Find possible routes with the remaining budget
         let routes = network.find_possible_routes_with_budget(
             &observed_node,
             timelock_analysis.remaining_cltv_budget,
-            max_hops);
+            max_hops,
+        );
 
-        // Log the analysis
         println!("HTLC Analysis for hash {}", htlc.payment_hash);
         println!("  Remaining CLTV budget: {}", timelock_analysis.remaining_cltv_budget);
         println!("  Estimated hops remaining: up to {}", max_hops);
         println!("  Potential final hop: {}", timelock_analysis.could_be_final_hop);
         println!("  Found {} potential routes from node {}", routes.len(), observed_node);
 
-        // Calculate confidence scores and create PotentialRecipient objects
-        for route in routes {
-            // The last node in the route is the potential recipient
-            if let Some(recipient) = route.last() {
-                // Create a PotentialRecipient with confidence score
-                if let Some(node) = network.nodes.get(recipient) {
-                    let alias = Some(node.alias.clone());
-
-                    // Calculate a confidence score based on route length, timelock, etc.
-                    // This is a simplified heuristic - real attackers would have more sophisticated methods
-                    let confidence = self.calculate_confidence_score(&route, &timelock_analysis);
-
-                    potential_recipients.push(PotentialRecipient {
-                        node_id: recipient.clone(),
-                        node_alias: alias,
-                        route: route.clone(),
-                        confidence_score: confidence,
-                    });
-
-                    println!("  Potential recipient: {} with confidence {:.2}",
-                             node.alias, confidence);
+        let potential_recipients: Vec<PotentialRecipient> = routes
+            .par_iter()
+            .filter_map(|route| {
+                if let Some(recipient) = route.last() {
+                    network.nodes.get(recipient).map(|node| {
+                        let confidence = Self::calculate_confidence_score(route, &timelock_analysis, &network);
+                        println!("  Potential recipient: {} with confidence {:.2}", node.alias, confidence);
+                        PotentialRecipient {
+                            node_id: recipient.clone(),
+                            node_alias: Some(node.alias.clone()),
+                            route: route.clone(),
+                            confidence_score: confidence,
+                        }
+                    })
+                } else {
+                    None
                 }
-            }
-        }
+            })
+            .collect();
 
-        // Sort by confidence score
-        potential_recipients.sort_by(|a, b| b.confidence_score.partial_cmp(&a.confidence_score).unwrap());
-
-        potential_recipients
+        let mut sorted_recipients = potential_recipients;
+        sorted_recipients.sort_by(|a, b| b.confidence_score.partial_cmp(&a.confidence_score).unwrap());
+        sorted_recipients
     }
 
     // Correlate observations from multiple malicious nodes to narrow down senders/recipients
@@ -134,39 +123,40 @@ impl HTLCAnalyzer {
     }
 
     // Calculate a confidence score for a potential route
-    fn calculate_confidence_score(&self, route: &[String], analysis: &TimelockAnalysis) -> f32 {
-        let network = self.network.lock().unwrap();
-
-        // Base confidence based on remaining CLTV budget
+    fn calculate_confidence_score(
+        route: &[String],
+        analysis: &TimelockAnalysis,
+        network: &LightningNetworkMap,
+    ) -> f32 {
+        // Base confidence starts at 1.0
         let mut confidence = 1.0;
 
-        // Confidence decreases with route length - shorter routes are more likely
+        // Penalize longer routes (prefer shorter)
         confidence *= 1.0 / (route.len() as f32).powf(0.5);
 
-        // If the timelock analysis suggests this is a final hop, increase confidence
+        // Boost if could be final hop and route is short
         if analysis.could_be_final_hop && route.len() <= 2 {
             confidence *= 1.5;
         }
 
-        // Check if the destination node's CLTV delta is close to DEFAULT_FINAL_CLTV_DELTA
+        // Check if final node has standard CLTV delta
         if let Some(recipient) = route.last() {
             if let Some(node) = network.nodes.get(recipient) {
                 let delta_diff = (node.cltv_expiry_delta as i32 - DEFAULT_FINAL_CLTV_DELTA as i32).abs();
                 if delta_diff <= 5 {
-                    confidence *= 1.3;  // Node uses standard CLTV delta, more likely
+                    confidence *= 1.3;
                 }
             }
         }
 
-        // Check for logical consistency in the route
+        // Penalize route if links are not consistent
         let mut consistent = true;
-        for i in 0..route.len() - 1 {
-            let from_node = &route[i];
-            let to_node = &route[i + 1];
+        for i in 0..route.len().saturating_sub(1) {
+            let from = &route[i];
+            let to = &route[i + 1];
 
-            // Check if there's an actual channel between these nodes
-            if let Some(neighbors) = network.get_neighbors(from_node) {
-                if !neighbors.contains(&to_node.to_string()) {
+            if let Some(neighbors) = network.get_neighbors(from) {
+                if !neighbors.contains(to) {
                     consistent = false;
                     break;
                 }
@@ -177,11 +167,12 @@ impl HTLCAnalyzer {
         }
 
         if !consistent {
-            confidence *= 0.1;  // Heavily penalize inconsistent routes
+            confidence *= 0.1;
         }
 
         confidence
     }
+
 
     // Try to backtrack from an observation to find potential senders
     pub fn backtrack_potential_senders(&self, htlc: &HTLC) -> Vec<String> {
