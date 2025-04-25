@@ -68,7 +68,7 @@ impl PaymentSimulator {
         println!("  Found path with {} hops", path.len() - 1);
 
         // Create a unique payment hash
-        let payment_hash = format!("hash_{:016x}", self.rng.random()::<u64>());
+        let payment_hash = format!("hash_{:016x}", self.rng.random::<u64>());
         let amount = self.rng.random_range(10000..1000000); // Random amount in millisatoshis
 
         // Add random offset for privacy
@@ -193,7 +193,7 @@ impl PaymentSimulator {
         println!("  Found path with {} hops", path.len() - 1);
 
         // Create a unique payment hash
-        let payment_hash = format!("hash_{:016x}", self.rng.random()::<u64>());
+        let payment_hash = format!("hash_{:016x}", self.rng.random::<u64>());
         let amount = self.rng.random_range(10000..1000000); // Random amount in millisatoshis
 
         // Add random offset for privacy
