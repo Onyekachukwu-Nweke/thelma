@@ -2,6 +2,8 @@
 name = "thelma"
 version = "0.1.0"
 edition = "2021"
+description = "Timelock Heuristic Evaluation for Lightning Movement Analysis"
+authors = ["Onyekachukwu Ejiofor Nweke nwekeejioforscheller@gmail.com"]
 
 [dependencies]
 log = "0.4.27"

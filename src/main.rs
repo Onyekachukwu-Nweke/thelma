@@ -1,6 +1,6 @@
 pub mod models;
-mod surveillance;
-mod simulation;
+pub mod surveillance;
+pub mod simulation;
 
 fn main() {
     println!("Hello, world!");
