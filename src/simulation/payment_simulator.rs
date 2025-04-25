@@ -25,7 +25,7 @@ impl PaymentSimulator {
                delay_ms: u64) -> Self {
         PaymentSimulator {
             network,
-            rng: rand::thread_rng(),
+            rng: rand::rng(),
             surveillance,
             delay_ms,
         }
@@ -46,10 +46,10 @@ impl PaymentSimulator {
         }
 
         // Pick random sender and receiver
-        let sender_idx = self.rng.gen_range(0..node_keys.len());
-        let mut receiver_idx = self.rng.gen_range(0..node_keys.len());
+        let sender_idx = self.rng.random_range(0..node_keys.len());
+        let mut receiver_idx = self.rng.random_range(0..node_keys.len());
         while receiver_idx == sender_idx {
-            receiver_idx = self.rng.gen_range(0..node_keys.len());
+            receiver_idx = self.rng.random_range(0..node_keys.len());
         }
 
         let sender = &node_keys[sender_idx];
@@ -68,11 +68,11 @@ impl PaymentSimulator {
         println!("  Found path with {} hops", path.len() - 1);
 
         // Create a unique payment hash
-        let payment_hash = format!("hash_{:016x}", self.rng.gen::<u64>());
-        let amount = self.rng.gen_range(10000..1000000); // Random amount in millisatoshis
+        let payment_hash = format!("hash_{:016x}", self.rng.random()::<u64>());
+        let amount = self.rng.random_range(10000..1000000); // Random amount in millisatoshis
 
         // Add random offset for privacy
-        let random_offset = self.rng.gen_range(CLTV_RANDOM_OFFSET_MIN..CLTV_RANDOM_OFFSET_MAX);
+        let random_offset = self.rng.random_range(CLTV_RANDOM_OFFSET_MIN..CLTV_RANDOM_OFFSET_MAX);
 
         // Calculate the final CLTV expiry
         let mut final_cltv_expiry = current_height + DEFAULT_FINAL_CLTV_DELTA + random_offset;
@@ -193,11 +193,11 @@ impl PaymentSimulator {
         println!("  Found path with {} hops", path.len() - 1);
 
         // Create a unique payment hash
-        let payment_hash = format!("hash_{:016x}", self.rng.gen::<u64>());
-        let amount = self.rng.gen_range(10000..1000000); // Random amount in millisatoshis
+        let payment_hash = format!("hash_{:016x}", self.rng.random()::<u64>());
+        let amount = self.rng.random_range(10000..1000000); // Random amount in millisatoshis
 
         // Add random offset for privacy
-        let random_offset = self.rng.gen_range(CLTV_RANDOM_OFFSET_MIN..CLTV_RANDOM_OFFSET_MAX);
+        let random_offset = self.rng.random_range(CLTV_RANDOM_OFFSET_MIN..CLTV_RANDOM_OFFSET_MAX);
 
         // Calculate the final CLTV expiry
         let mut final_cltv_expiry = current_height + DEFAULT_FINAL_CLTV_DELTA + random_offset;
